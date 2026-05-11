@@ -136,7 +136,8 @@ classdef FtpSession < handle
                         obj.Conn = ftp(char(h), char(obj.Username), char(obj.Password), ...
                             TLSMode=char(obj.TlsMode), ...
                             ConnectionTimeout=obj.ConnectTimeout, ...
-                            TransferTimeout=obj.TransferTimeout);
+                            TransferTimeout=obj.TransferTimeout, ...
+                            DirParserFcn=@ice.ftp.FtpSession.tolerantDirParser);
                     end
                     obj.ActiveHost = h;
                     ice.util.log("ftp_connect_ok", ...
@@ -170,6 +171,75 @@ classdef FtpSession < handle
         function ensureConnected(obj)
             if isempty(obj.Conn)
                 obj.connect();
+            end
+        end
+    end
+
+    methods (Static)
+        function listing = tolerantDirParser(lines, ~)
+            %TOLERANTDIRPARSER Permissive parser for unix-style LIST output.
+            %   MATLAB's built-in parser hard-fails on any line it cannot
+            %   split into exactly its expected token count, which breaks
+            %   listings containing oddly-formatted entries (e.g. very long
+            %   filenames or unusual date columns). This parser extracts
+            %   what we need (name, size, isdir) and silently skips lines
+            %   that don't look like a standard LIST entry.
+            %
+            %   Standard unix LIST line:
+            %     -rw-r--r--  1 user group   12345 May 11 12:34 filename.csv.gz
+            %     drwxr-xr-x  2 user group    4096 May 11 12:34 PUB1
+            %     lrwxrwxrwx  1 user group      28 May 11 12:34 link.csv -> target.csv
+
+            n = numel(lines);
+            namesC   = cell(n,1);
+            sizesC   = cell(n,1);
+            isdirsC  = cell(n,1);
+            datenumC = cell(n,1);
+            dateC    = cell(n,1);
+            kept = false(n,1);
+
+            for k = 1:n
+                line = strip(lines(k));
+                if strlength(line) == 0; continue; end
+                parts = strsplit(line);
+                if numel(parts) < 9; continue; end   % "total NN" lines etc.
+                perms = char(parts{1});
+                if numel(perms) < 1; continue; end
+                isDir = perms(1) == 'd';
+                isLink = perms(1) == 'l';
+                bytes = str2double(parts{5});
+                if isnan(bytes); continue; end
+                % Filename runs from token 9 to end, BUT for symlinks the
+                % format is "name -> target" so we cut at " -> " if present.
+                tail = strjoin(parts(9:end), " ");
+                if isLink
+                    arrow = strfind(tail, " -> ");
+                    if ~isempty(arrow)
+                        tail = extractBefore(tail, arrow(1));
+                    end
+                end
+                name = char(strip(tail));
+                if isempty(name) || any(strcmp(name, {'.', '..'})); continue; end
+
+                kept(k) = true;
+                namesC{k}   = name;
+                sizesC{k}   = bytes;
+                isdirsC{k}  = isDir;
+                dateC{k}    = strjoin(parts(6:8), " ");
+                datenumC{k} = NaN;  % MATLAB's parser also leaves this loose
+            end
+
+            keep = find(kept);
+            listing = struct("name", "", "date", "", "bytes", 0, ...
+                             "isdir", false, "datenum", NaN);
+            listing = repmat(listing, numel(keep), 1);
+            for j = 1:numel(keep)
+                idx = keep(j);
+                listing(j).name    = namesC{idx};
+                listing(j).date    = dateC{idx};
+                listing(j).bytes   = sizesC{idx};
+                listing(j).isdir   = isdirsC{idx};
+                listing(j).datenum = datenumC{idx};
             end
         end
     end
