@@ -78,9 +78,10 @@ classdef Cache < handle
 
     methods (Static, Access = private)
         function h = hashKey(key)
-            md = java.security.MessageDigest.getInstance("SHA-1");
-            bytes = md.digest(uint8(char(key)));
-            h = string(lower(reshape(dec2hex(typecast(bytes, "uint8"), 2).', 1, [])));
+            % MATLAB built-in keyHash is collision-resistant enough for a
+            % filesystem cache (uint64, ~10^-19 collision probability at
+            % practical scale) and avoids any JVM dependency.
+            h = string(dec2hex(keyHash(key), 16));
         end
     end
 end
