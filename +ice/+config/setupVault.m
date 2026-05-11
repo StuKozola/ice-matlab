@@ -3,6 +3,12 @@ function setupVault(opts)
 %   ice.config.setupVault()              prompts for all four keys
 %   ice.config.setupVault(Keys=["..."])  prompts only for the listed keys
 %   ice.config.setupVault(Overwrite=true) replaces existing Vault entries
+%
+%   MATLAB's setSecret prompts for the value itself (the API does not accept
+%   the value as a function argument — this is by design so the secret never
+%   appears in command history or workspace). This wrapper just iterates the
+%   keys and calls setSecret for each, skipping any that already exist unless
+%   Overwrite is set.
 
 arguments
     opts.Keys (1,:) string = ["ICE_FTP_USER", "ICE_FTP_PWD", "ICE_API_USER", "ICE_API_PWD"]
@@ -14,26 +20,7 @@ for k = opts.Keys
         fprintf("[skip] %s already in Vault (pass Overwrite=true to replace)\n", k);
         continue
     end
-    if endsWith(k, "_PWD") || endsWith(k, "_PASSWORD") || endsWith(k, "_TOKEN")
-        v = string(getPasswordFromUser(sprintf("Enter value for %s: ", k)));
-    else
-        v = string(input(sprintf("Enter value for %s: ", k), "s"));
-    end
-    if strlength(v) == 0
-        fprintf("[skip] empty value for %s\n", k);
-        continue
-    end
-    setSecret(k, v);
+    setSecret(char(k), Overwrite=opts.Overwrite);
     fprintf("[ok]   %s saved to Vault\n", k);
-end
-end
-
-function pw = getPasswordFromUser(prompt)
-fprintf("%s", prompt);
-try
-    rdr = java.io.BufferedReader(java.io.InputStreamReader(java.lang.System.in));
-    pw = char(rdr.readLine());
-catch
-    pw = input("", "s");
 end
 end
