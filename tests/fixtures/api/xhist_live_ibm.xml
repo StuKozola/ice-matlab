@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="ISO-8859-1" standalone="yes" ?>
+
+<xhist retrieved = "2026-05-11T21:29:04Z" symbol="IBM">
+<bar date="2026-05-08">
+<open>229.73</open>
+<high>230.705</high>
+<low>224.83</low>
+<close>229.76</close>
+<volume>5332800</volume>
+</bar>
+<bar date="2026-05-07">
+<open>227.5</open>
+<high>231.82</high>
+<low>227.41</low>
+<close>231.31</close>
+<volume>5485545</volume>
+</bar>
+<bar date="2026-05-06">
+<open>228.75</open>
+<high>229</high>
+<low>224.38</low>
+<close>225.74</close>
+<volume>7673185</volume>
+</bar>
+<bar date="2026-05-05">
+<open>230.16</open>
+<high>231</high>
+<low>227.15</low>
+<close>229.03</close>
+<volume>4221889</volume>
+</bar>
+<bar date="2026-05-04">
+<open>232</open>
+<high>234.09</high>
+<low>228.615</low>
+<close>229.48</close>
+<volume>4003082</volume>
+</bar>
+</xhist>

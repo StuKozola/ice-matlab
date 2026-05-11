@@ -28,7 +28,15 @@ fclose(fid);
 
 s = readstruct(tmp, FileType="xml");
 
-if ~isfield(s, "r")
+% Row element is "bar" on live xhist responses but "r" in the docs' sample
+% XML (the spec XSD uses <bar>, the sample uses <r>). Handle both.
+if isfield(s, "bar")
+    rows = s.bar;
+elseif isfield(s, "r")
+    rows = s.r;
+elseif isfield(s, "tick")   % xtick tick-level mode (not bar mode)
+    rows = s.tick;
+else
     tt = timetable();
     tt = addprop(tt, "symbol", "table");
     if isfield(s, "symbolAttribute")
@@ -37,15 +45,22 @@ if ~isfield(s, "r")
     return
 end
 
-n = numel(s.r);
+n = numel(rows);
 dates = strings(n, 1);
 times = strings(n, 1);
 opens = nan(n,1); highs = nan(n,1); lows = nan(n,1);
 closes = nan(n,1); vols = nan(n,1); oi = nan(n,1);
 
 for k = 1:n
-    row = s.r(k);
-    if isfield(row, "dateAttribute"); dates(k) = string(row.dateAttribute); end
+    row = rows(k);
+    % Row timestamp comes either as a "date" attribute (xhist, sample-style),
+    % a "datetime" attribute (xtick bar element per XSD), or as separate
+    % date + time attributes.
+    if isfield(row, "datetimeAttribute") && ~ismissing(row.datetimeAttribute)
+        dates(k) = string(row.datetimeAttribute);
+    elseif isfield(row, "dateAttribute")
+        dates(k) = string(row.dateAttribute);
+    end
     if isfield(row, "timeAttribute"); times(k) = string(row.timeAttribute); end
     if isfield(row, "open"); opens(k) = toDouble(row.open); end
     if isfield(row, "high"); highs(k) = toDouble(row.high); end
@@ -57,18 +72,54 @@ end
 
 % Combine date + time (when present) into a single datetime.
 hasTime = any(strlength(times) > 0);
-if hasTime
-    when = datetime(dates + " " + times, ...
-        InputFormat="yyyy/MM/dd HH:mm:ss", TimeZone="UTC");
-else
-    when = datetime(dates, InputFormat="yyyy/MM/dd", TimeZone="UTC");
-end
+when = parseTimestamps(dates, times, hasTime);
 
 tt = timetable(when, opens, highs, lows, closes, vols, oi, ...
     VariableNames=["open","high","low","close","volume","openinterest"]);
 tt = addprop(tt, "symbol", "table");
 if isfield(s, "symbolAttribute")
     tt.Properties.CustomProperties.symbol = string(s.symbolAttribute);
+end
+end
+
+function when = parseTimestamps(dates, times, hasTime)
+% ICE varies the date format across endpoints:
+%   xhist sample (doc):  yyyy/MM/dd
+%   xhist live:          yyyy-MM-dd
+%   xtick XSD:           ISO 8601 datetime in the datetime attribute
+% Detect format from the first non-empty value, fall back to ISO.
+firstDate = "";
+for k = 1:numel(dates)
+    if strlength(dates(k)) > 0
+        firstDate = dates(k);
+        break;
+    end
+end
+
+if hasTime
+    combined = dates + " " + times;
+    inputFmt = pickFormat(firstDate, true);
+    when = datetime(combined, InputFormat=inputFmt, TimeZone="UTC");
+elseif contains(firstDate, "T")
+    when = datetime(dates, InputFormat="uuuu-MM-dd'T'HH:mm:ss", TimeZone="UTC");
+else
+    inputFmt = pickFormat(firstDate, false);
+    when = datetime(dates, InputFormat=inputFmt, TimeZone="UTC");
+end
+end
+
+function fmt = pickFormat(sample, hasTime)
+if contains(sample, "-")
+    base = "uuuu-MM-dd";
+elseif contains(sample, "/")
+    base = "yyyy/MM/dd";
+else
+    base = "yyyyMMdd";
+end
+if hasTime
+    fmt = base + " HH:mm:ss";
+else
+    fmt = base;
 end
 end
 
