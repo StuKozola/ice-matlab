@@ -1,0 +1,45 @@
+# ICE confidential documentation — must not be published
+ice_developer_docs/
+extracted_text/
+
+# Local cache (FTP downloads, parquet, logs, lock file)
+data/
+
+# Credentials
+.env
+.env.*
+!.env.example
+ice/+config/local.m
+ice/+config/+local/
+
+# Claude Code agent state
+.claude/
+
+# MATLAB
+*.asv
+*.autosave
+*.m~
+*.mex*
+*.mexa64
+*.mexmaci64
+*.mexw32
+*.mexw64
+slprj/
+sccprj/
+codegen/
+*.slxc
+octave-workspace
+
+# Python (for the PDF extractor helper)
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+.vscode/
+.idea/
