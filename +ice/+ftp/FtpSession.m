@@ -59,11 +59,36 @@ classdef FtpSession < handle
                 remotePath (1,1) string = "."
             end
             obj.ensureConnected();
-            d = dir(obj.Conn, char(remotePath));
-            if isempty(d)
+            entries = obj.listDetailed(remotePath);
+            if isempty(entries)
                 names = strings(0);
             else
-                names = string({d.name});
+                names = string({entries.name});
+            end
+        end
+
+        function entries = listDetailed(obj, remotePath)
+            %LISTDETAILED Return struct array of remote entries (name, bytes, isdir).
+            %   Bypasses MATLAB's dir() symlink-replacement step (which crashes
+            %   on real ICE FTPCSD/ listings) by requesting the raw LIST
+            %   output with ParseOutput=false and parsing it locally with our
+            %   tolerant parser.
+            arguments
+                obj
+                remotePath (1,1) string = "."
+            end
+            obj.ensureConnected();
+            if obj.Protocol == "sftp"
+                d = dir(obj.Conn, char(remotePath));
+            else
+                rawLines = dir(obj.Conn, char(remotePath), ParseOutput=false);
+                d = ice.ftp.FtpSession.tolerantDirParser(rawLines, obj.Conn.ServerLocale);
+            end
+            if isempty(d)
+                entries = struct("name", {}, "bytes", {}, "isdir", {}, ...
+                                 "date", {}, "datenum", {});
+            else
+                entries = d;
             end
         end
 
@@ -136,8 +161,7 @@ classdef FtpSession < handle
                         obj.Conn = ftp(char(h), char(obj.Username), char(obj.Password), ...
                             TLSMode=char(obj.TlsMode), ...
                             ConnectionTimeout=obj.ConnectTimeout, ...
-                            TransferTimeout=obj.TransferTimeout, ...
-                            DirParserFcn=@ice.ftp.FtpSession.tolerantDirParser);
+                            TransferTimeout=obj.TransferTimeout);
                     end
                     obj.ActiveHost = h;
                     ice.util.log("ftp_connect_ok", ...
