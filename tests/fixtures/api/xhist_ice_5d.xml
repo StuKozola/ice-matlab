@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="ISO-8859-1" standalone="yes" ?>
+<xhist symbol="ICE">
+    <r date="2020/08/10">
+        <open>100960000</open>
+        <high>101105000</high>
+        <low>98500000</low>
+        <close>99160000</close>
+        <volume>3587660</volume>
+        <openinterest>0</openinterest>
+    </r>
+    <r date="2020/08/11">
+        <open>99870000</open>
+        <high>99870000</high>
+        <low>98370000</low>
+        <close>98610000</close>
+        <volume>3825176</volume>
+        <openinterest>0</openinterest>
+    </r>
+    <r date="2020/08/12">
+        <open>99330000</open>
+        <high>100100000</high>
+        <low>99100000</low>
+        <close>99430000</close>
+        <volume>2859820</volume>
+        <openinterest>0</openinterest>
+    </r>
+    <r date="2020/08/13">
+        <open>99180000</open>
+        <high>100740000</high>
+        <low>98880000</low>
+        <close>100200000</close>
+        <volume>5028735</volume>
+        <openinterest>0</openinterest>
+    </r>
+</xhist>

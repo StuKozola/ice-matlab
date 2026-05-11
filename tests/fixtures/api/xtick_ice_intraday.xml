@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="ISO-8859-1" standalone="yes" ?>
+<xhist symbol="ICE">
+    <r date="2021/05/24" time="11:02:00">
+        <open>114280000</open>
+        <high>114310000</high>
+        <low>114215000</low>
+        <close>114220000</close>
+        <volume>5467</volume>
+    </r>
+    <r date="2021/05/24" time="11:04:00">
+        <open>114200000</open>
+        <high>114225000</high>
+        <low>114120000</low>
+        <close>114170000</close>
+        <volume>9454</volume>
+    </r>
+    <r date="2021/05/24" time="11:06:00">
+        <open>114190000</open>
+        <high>114200000</high>
+        <low>114150000</low>
+        <close>114155000</close>
+        <volume>1211</volume>
+    </r>
+</xhist>

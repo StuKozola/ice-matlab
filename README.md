@@ -9,7 +9,14 @@ Target environment: MATLAB R2024b on Windows. FTP transport via MATLAB's built-i
 
 ## Status
 
-Pre-implementation. See [`ICE_MATLAB_Architecture_Plan.md`](ICE_MATLAB_Architecture_Plan.md) for the full design and phasing.
+Phases 1–4 implemented; 72 unit tests passing.
+
+- **Phase 1** — foundations: `+util` (rate limiter, retry, cache, file lock, structured log) and `+config` (Vault- and `.env`-backed credentials).
+- **Phase 2** — FTP transport + FTPCSD/FTPSEDOL readers + `SymbolCache`.
+- **Phase 3** — `ice.jobs.syncDailySymbology` batch job and `scheduled/run_daily.bat` Task Scheduler wrapper.
+- **Phase 4** — XML Quote / History API client (`ice.api.Session`, `ice.api.quote`, `ice.api.history`, `ice.api.intradayHistory`) talking to production.
+
+See [`ICE_MATLAB_Architecture_Plan.md`](ICE_MATLAB_Architecture_Plan.md) for the full design.
 
 ## Layout
 

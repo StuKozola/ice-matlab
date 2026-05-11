@@ -1,0 +1,31 @@
+<?xml version="1.0" standalone="yes" ?>
+<quotes request="IBM,GOOG,MSFT,AAPL" retrieved="Tuesday, February 19, 2008 21:16:46">
+<quote status="ok" request="IBM" id="IBM">
+<recent>105</recent>
+<high>107.62</high>
+<last>105</last>
+<low>104.64</low>
+<open>106.94</open>
+</quote>
+<quote status="ok" request="GOOG" id="GOOG">
+<recent>508.95</recent>
+<high>535.06</high>
+<last>508.95</last>
+<low>506.5</low>
+<open>534.94</open>
+</quote>
+<quote status="ok" request="MSFT" id="MSFT">
+<recent>28.17</recent>
+<high>28.84</high>
+<last>28.17</last>
+<low>28.07</low>
+<open>28.8</open>
+</quote>
+<quote status="ok" request="AAPL" id="AAPL">
+<recent>122.18</recent>
+<high>126.75</high>
+<last>122.18</last>
+<low>121.44</low>
+<open>125.99</open>
+</quote>
+</quotes>
