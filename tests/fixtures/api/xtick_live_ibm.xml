@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="ISO-8859-1" standalone="yes" ?>
+
+<xtick retrieved = "2026-05-11T21:32:36Z" symbol="IBM">
+<bar datetime="2026-05-11T20:00:00Z" barlen="1">
+<open>223.55</open>
+<high>223.55</high>
+<low>223.55</low>
+<close>223.55</close>
+<volume>1114188</volume>
+</bar>
+<bar datetime="2026-05-11T19:59:00Z" barlen="1">
+<open>223.6515</open>
+<high>223.76</high>
+<low>223.2</low>
+<close>223.57</close>
+<volume>196098</volume>
+</bar>
+<bar datetime="2026-05-11T19:58:00Z" barlen="1">
+<open>223.62</open>
+<high>223.7</high>
+<low>223.51</low>
+<close>223.66</close>
+<volume>53082</volume>
+</bar>
+</xtick>

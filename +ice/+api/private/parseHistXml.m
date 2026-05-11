@@ -101,7 +101,10 @@ if hasTime
     inputFmt = pickFormat(firstDate, true);
     when = datetime(combined, InputFormat=inputFmt, TimeZone="UTC");
 elseif contains(firstDate, "T")
-    when = datetime(dates, InputFormat="uuuu-MM-dd'T'HH:mm:ss", TimeZone="UTC");
+    % Live xtick sends "yyyy-MM-ddTHH:mm:ssZ"; strip the trailing Z (or any
+    % timezone suffix) since we're already declaring TimeZone="UTC".
+    cleaned = regexprep(dates, "Z$", "");
+    when = datetime(cleaned, InputFormat="uuuu-MM-dd'T'HH:mm:ss", TimeZone="UTC");
 else
     inputFmt = pickFormat(firstDate, false);
     when = datetime(dates, InputFormat=inputFmt, TimeZone="UTC");

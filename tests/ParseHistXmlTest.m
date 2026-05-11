@@ -59,6 +59,21 @@ classdef ParseHistXmlTest < matlab.unittest.TestCase
             tc.verifyError(@() ice.api.parseHist(xml), "ice:api:ResponseError");
         end
 
+        function liveIntradayFormatParsed(tc)
+            % Live xtick response uses <bar datetime="yyyy-MM-ddTHH:mm:ssZ">
+            % with decimal prices.
+            here = fileparts(mfilename("fullpath"));
+            fix = fullfile(here, "fixtures", "api", "xtick_live_ibm.xml");
+            xml = string(fileread(fix));
+            tt = ice.api.parseHist(xml);
+            tc.verifyEqual(height(tt), 3);
+            tc.verifyEqual(tt.Properties.RowTimes(1), ...
+                datetime(2026,5,11,20,0,0, TimeZone="UTC"));
+            tc.verifyEqual(tt.open(1), 223.55);
+            tc.verifyEqual(tt.volume(1), 1114188);
+            tc.verifyEqual(string(tt.Properties.CustomProperties.symbol), "IBM");
+        end
+
         function liveDailyFormatParsed(tc)
             % Live xhist response uses <bar date="yyyy-MM-dd"> with decimal
             % prices, different from the user-guide sample which uses
