@@ -18,6 +18,7 @@ classdef FtpSession < handle
         TlsMode  (1,1) string = "opportunistic"
         ConnectTimeout (1,1) duration = seconds(60)
         TransferTimeout (1,1) duration = seconds(600)
+        SuppressCleartextWarning (1,1) logical = false
     end
 
     properties (Access = private)
@@ -36,8 +37,10 @@ classdef FtpSession < handle
                 opts.Password (1,1) string = ice.config.credentials("ICE_FTP_PWD")
                 opts.ConnectTimeout (1,1) duration = seconds(60)
                 opts.TransferTimeout (1,1) duration = seconds(600)
+                opts.SuppressCleartextWarning (1,1) logical = false
             end
             obj.Protocol = opts.Protocol;
+            obj.SuppressCleartextWarning = opts.SuppressCleartextWarning;
             if isempty(opts.Hosts)
                 opts.Hosts = defaultHostsFor(obj.Protocol);
             end
@@ -140,6 +143,16 @@ classdef FtpSession < handle
                         struct("host", h, "user", obj.Username, ...
                                "protocol", obj.Protocol, ...
                                "tlsMode", obj.TlsMode));
+                    if obj.Protocol == "ftp" && obj.TlsMode ~= "strict" ...
+                            && ~obj.SuppressCleartextWarning
+                        ice.util.log("ftp_cleartext_warning", ...
+                            struct("host", h, ...
+                                   "note", ['Session may be cleartext: ICE prod hosts ' ...
+                                            'were observed not to advertise AUTH TLS as of 2026-05. ' ...
+                                            'Pass SuppressCleartextWarning=true to silence ' ...
+                                            'once you have confirmed your network path is acceptable.']), ...
+                            Level="warn");
+                    end
                     return
                 catch err
                     lastErr = err;
