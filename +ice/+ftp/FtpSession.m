@@ -1,14 +1,21 @@
 classdef FtpSession < handle
-    %FtpSession Resilient SFTP session against the ICE FTP servers.
-    %   Connects to one of eod11/eod12/eod13.icedataservices.com (rotating
-    %   on connection failure), authenticates with credentials resolved by
-    %   ice.config.credentials, and exposes basic listing / atomic download
-    %   primitives. Closes the underlying connection when the object is
-    %   destroyed.
+    %FtpSession Resilient connection to the ICE EOD servers.
+    %   ICE production hosts (eod11/eod12/eod13) accept plain FTP on port 21
+    %   only; SFTP/22 is reserved for the developer test site
+    %   (idsftp.icedataservices.com). Defaults reflect that: ftp() with
+    %   TLSMode="opportunistic" so we upgrade to FTPS via AUTH TLS when the
+    %   server advertises it, and fall back to cleartext when it doesn't.
+    %
+    %   Pass Protocol="sftp" to talk to idsftp / any SFTP host; pass
+    %   TlsMode="strict" to refuse cleartext when using FTP. Hosts rotate
+    %   on connect failure. Downloads land on a .part sibling and rename
+    %   atomically.
 
     properties (SetAccess = immutable)
         Hosts (1,:) string
         Username (1,1) string
+        Protocol (1,1) string = "ftp"
+        TlsMode  (1,1) string = "opportunistic"
         ConnectTimeout (1,1) duration = seconds(60)
         TransferTimeout (1,1) duration = seconds(600)
     end
@@ -22,17 +29,22 @@ classdef FtpSession < handle
     methods
         function obj = FtpSession(opts)
             arguments
-                opts.Hosts (1,:) string = ["eod11.icedataservices.com", ...
-                                            "eod12.icedataservices.com", ...
-                                            "eod13.icedataservices.com"]
+                opts.Protocol (1,1) string {mustBeMember(opts.Protocol, ["ftp","sftp"])} = "ftp"
+                opts.Hosts (1,:) string = string.empty
+                opts.TlsMode (1,1) string {mustBeMember(opts.TlsMode, ["none","opportunistic","strict"])} = "opportunistic"
                 opts.Username (1,1) string = ice.config.credentials("ICE_FTP_USER")
                 opts.Password (1,1) string = ice.config.credentials("ICE_FTP_PWD")
                 opts.ConnectTimeout (1,1) duration = seconds(60)
                 opts.TransferTimeout (1,1) duration = seconds(600)
             end
+            obj.Protocol = opts.Protocol;
+            if isempty(opts.Hosts)
+                opts.Hosts = defaultHostsFor(obj.Protocol);
+            end
             obj.Hosts = opts.Hosts;
             obj.Username = opts.Username;
             obj.Password = opts.Password;
+            obj.TlsMode = opts.TlsMode;
             obj.ConnectTimeout = opts.ConnectTimeout;
             obj.TransferTimeout = opts.TransferTimeout;
             obj.connect();
@@ -112,19 +124,29 @@ classdef FtpSession < handle
             lastErr = MException.empty;
             for h = obj.Hosts
                 try
-                    obj.Conn = sftp(char(h), char(obj.Username), ...
-                        Password=char(obj.Password), ...
-                        ConnectionTimeout=obj.ConnectTimeout, ...
-                        TransferTimeout=obj.TransferTimeout);
+                    if obj.Protocol == "sftp"
+                        obj.Conn = sftp(char(h), char(obj.Username), ...
+                            Password=char(obj.Password), ...
+                            ConnectionTimeout=obj.ConnectTimeout, ...
+                            TransferTimeout=obj.TransferTimeout);
+                    else
+                        obj.Conn = ftp(char(h), char(obj.Username), char(obj.Password), ...
+                            TLSMode=char(obj.TlsMode), ...
+                            ConnectionTimeout=obj.ConnectTimeout, ...
+                            TransferTimeout=obj.TransferTimeout);
+                    end
                     obj.ActiveHost = h;
                     ice.util.log("ftp_connect_ok", ...
-                        struct("host", h, "user", obj.Username));
+                        struct("host", h, "user", obj.Username, ...
+                               "protocol", obj.Protocol, ...
+                               "tlsMode", obj.TlsMode));
                     return
                 catch err
                     lastErr = err;
                     ice.util.log("ftp_connect_fail", ...
                         struct("host", h, "id", err.identifier, ...
-                               "message", err.message), Level="warn");
+                               "message", err.message, ...
+                               "protocol", obj.Protocol), Level="warn");
                 end
             end
             error("ice:ftp:FtpSession:NoHostReachable", ...
@@ -138,4 +160,14 @@ classdef FtpSession < handle
             end
         end
     end
+end
+
+function h = defaultHostsFor(protocol)
+if protocol == "sftp"
+    h = "idsftp.icedataservices.com";
+else
+    h = ["eod11.icedataservices.com", ...
+         "eod12.icedataservices.com", ...
+         "eod13.icedataservices.com"];
+end
 end

@@ -1,17 +1,16 @@
 %[text] # ICE FTP Smoke Test
-%[text] Run this script once to verify your FTP credentials and that the SFTP layer can reach the ICE EOD servers.
+%[text] Run this script once to verify your credentials and that the FTP layer can reach the ICE EOD servers.
 %[text] Prerequisites:
 %[text] - Either run `ice.config.setupVault()` once and enter your `ICE_FTP_USER` / `ICE_FTP_PWD` at the prompt, **or** place them in a `.env` file at the toolbox root. See `.env.example` for the format.
 %[text] What this script does:
-%[text] - Opens an SFTP session against `eod11/eod12/eod13.icedataservices.com` (whichever responds first).
-%[text] - Lists the root directory.
-%[text] - Looks for FTPSEDOL and FTPCSD subdirectories.
-%[text] - Prints which active host it landed on.
-%[text] - Closes the session cleanly.
-%[text] No files are downloaded. \
+%[text] - Opens an FTP session against `eod11/eod12/eod13.icedataservices.com` (whichever responds first). ICE production hosts speak plain FTP on port 21 only; SFTP is reserved for `idsftp.icedataservices.com` (developer test site).
+%[text] - Defaults to `TlsMode="opportunistic"` so the connection upgrades to FTPS via `AUTH TLS` if the server supports it, and stays cleartext otherwise. Pass `TlsMode="strict"` to require TLS.
+%[text] - Lists the root directory, looks for FTPSEDOL and FTPCSD entries, and reports the active host.
+%[text] - Closes the session cleanly. \
 addpath(fileparts(fileparts(mfilename("fullpath"))));
 %%
 %[text] ## Open the session
+%[text] To connect to the developer SFTP host instead, pass `Protocol="sftp"`.
 session = ice.ftp.FtpSession();
 fprintf("Connected to: %s as %s\n", session.activeHost(), ...
     ice.config.credentials("ICE_FTP_USER"));

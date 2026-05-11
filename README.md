@@ -5,7 +5,7 @@ MATLAB toolbox for ingesting [ICE Data Services](https://www.theice.com/market-d
 - **Connect Enterprise API (XML)** — `/quote`, `/options`, `/xhist`, `/xtick`, `/flexhistory`
 - **FTP feeds** — EODD, FTPCSD, FTPSEDOL, FTPCUSIP, FTPGICS, FTPFD, FTPCA
 
-Target environment: MATLAB R2024b on Windows. SFTP transport via MATLAB's built-in `sftp` object. Credentials stored in MATLAB Vault (with `.env` fallback).
+Target environment: MATLAB R2024b on Windows. FTP transport via MATLAB's built-in `ftp` object with opportunistic TLS (production hosts `eod11/12/13.icedataservices.com` accept only port 21; SFTP is reserved for `idsftp.icedataservices.com`, the developer test site). Credentials stored in MATLAB Vault (with `.env` fallback).
 
 ## Status
 
@@ -16,7 +16,7 @@ Pre-implementation. See [`ICE_MATLAB_Architecture_Plan.md`](ICE_MATLAB_Architect
 ```
 +ice/           % MATLAB toolbox (planned)
   +api/         % HTTPS XML services
-  +ftp/         % SFTP file readers
+  +ftp/         % FTP/SFTP file readers
   +sym/         % symbol cross-reference
   +jobs/        % non-interactive batch entry points
   +util/        % rate limiter, retry, cache, file lock
