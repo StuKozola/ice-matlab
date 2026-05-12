@@ -43,3 +43,6 @@ desktop.ini
 *.swp
 .vscode/
 .idea/
+
+# Cygwin/Git-Bash crash dumps (occasionally left behind by msys runtime)
+*.stackdump
