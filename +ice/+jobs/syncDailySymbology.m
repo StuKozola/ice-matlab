@@ -18,7 +18,7 @@ function summary = syncDailySymbology(opts)
 %   - Any error propagates so MATLAB -batch exits with a nonzero code.
 
 arguments
-    opts.Workers (1,1) double {mustBePositive,mustBeInteger} = 4
+    opts.Workers (1,1) double {mustBePositive,mustBeInteger} = 2
     opts.SedolPub (1,1) double {mustBeInteger} = 5
     opts.SymbologyDir (1,1) string = "FTPCSD/PUB1"
     opts.Force (1,1) logical = false
@@ -92,10 +92,13 @@ sedolLocal = cache.rawPath(sedLatest);
 
 ice.util.log("sync_build_start", struct("ftpcsdFiles", numel(csdLocal)));
 sym = ice.sym.SymbolCache();
-sym.build(FtpcsdFiles=csdLocal, FtpsedolFile=sedolLocal, ...
+buildSummary = sym.build(FtpcsdFiles=csdLocal, FtpsedolFile=sedolLocal, ...
     Workers=opts.Workers);
-masterRows = height(sym.table());
-ice.util.log("sync_build_done", struct("masterRows", masterRows));
+masterRows = buildSummary.totalRows;
+ice.util.log("sync_build_done", struct( ...
+    "masterRows", masterRows, ...
+    "partitioned", buildSummary.partitioned, ...
+    "nParts", buildSummary.nParts));
 
 % --- summary ------------------------------------------------------------
 elapsed = datetime("now") - started;
