@@ -152,25 +152,34 @@ end
 function r = workerFetchOne(symbol, target, startDate, endDate, ...
         barInterval, currency, user, pwd, maxConcurrent, maxPerSecond)
 % Worker entry point: build a Session, fetch one symbol, write parquet.
+% Dispatches to /xhist (daily+) or /xtick with chunked windowing
+% (intraday) based on barInterval.
 r = struct("symbol", symbol, "rows", 0, "ok", false, "error", "");
 try
     sess = ice.api.Session(Username=user, Password=pwd, ...
         MaxConcurrent=maxConcurrent, MaxPerSecond=maxPerSecond);
-    args = {sess, symbol};
-    histOpts = struct( ...
-        "StartDate", startDate, ...
-        "EndDate", endDate, ...
-        "BarInterval", barInterval);
-    if strlength(currency) > 0
-        histOpts.Currency = currency;
+    if isIntradayInterval(barInterval)
+        if isnat(startDate) || isnat(endDate)
+            r.error = "intraday backfill requires StartDate and EndDate";
+            return
+        end
+        tt = ice.api.intradayHistoryRange(sess, symbol, startDate, endDate, ...
+            Period=barInterval);
+    else
+        histOpts = struct( ...
+            "StartDate", startDate, ...
+            "EndDate", endDate, ...
+            "BarInterval", barInterval);
+        if strlength(currency) > 0
+            histOpts.Currency = currency;
+        end
+        nv = struct2nv(histOpts);
+        tt = ice.api.history(sess, symbol, nv{:});
     end
-    nv = struct2nv(histOpts);
-    tt = ice.api.history(args{:}, nv{:});
-    if isempty(tt)
+    if isempty(tt) || height(tt) == 0
         r.error = "no rows returned";
         return
     end
-    % Persist as parquet. Convert timetable -> table so parquetwrite is happy.
     out = timetable2table(tt);
     parquetwrite(target, out);
     r.rows = height(out);
@@ -178,6 +187,13 @@ try
 catch err
     r.error = string(err.message);
 end
+end
+
+function tf = isIntradayInterval(barInterval)
+% /xtick periods: "t" (tick), "i<minutes>" (intraday bars).
+% Everything else goes through /xhist.
+b = lower(barInterval);
+tf = b == "t" || startsWith(b, "i");
 end
 
 function nv = struct2nv(s)
