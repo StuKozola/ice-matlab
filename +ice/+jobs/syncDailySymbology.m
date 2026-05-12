@@ -92,7 +92,8 @@ sedolLocal = cache.rawPath(sedLatest);
 
 ice.util.log("sync_build_start", struct("ftpcsdFiles", numel(csdLocal)));
 sym = ice.sym.SymbolCache();
-sym.build(FtpcsdFiles=csdLocal, FtpsedolFile=sedolLocal);
+sym.build(FtpcsdFiles=csdLocal, FtpsedolFile=sedolLocal, ...
+    Workers=opts.Workers);
 masterRows = height(sym.table());
 ice.util.log("sync_build_done", struct("masterRows", masterRows));
 

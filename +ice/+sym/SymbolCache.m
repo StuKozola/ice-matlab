@@ -32,26 +32,65 @@ classdef SymbolCache < handle
             %   iteration and exhausts memory on 311-source feeds; the
             %   one-shot vertcat plus categorical low-cardinality columns
             %   keeps the build inside the working set.
+            %
+            %   Workers > 1 fans the read step out across a Processes pool.
+            %   Memory caveat: each worker reads one file independently, so
+            %   peak RAM is roughly Workers × max-decompressed-file-size.
+            %   Default 4 is safe on 16+ GB machines; drop to 1 on smaller.
             arguments
                 obj
                 opts.FtpcsdFiles  (1,:) string = strings(0)
                 opts.FtpsedolFile (1,1) string = ""
                 opts.FtpcusipFile (1,1) string = ""
                 opts.ShowProgress (1,1) logical = true
+                opts.Workers (1,1) double {mustBePositive,mustBeInteger} = 4
             end
 
             nFiles = numel(opts.FtpcsdFiles);
             parts = cell(nFiles, 1);
 
+            useParallel = opts.Workers > 1 ...
+                && license("test", "Distrib_Computing_Toolbox") ...
+                && nFiles >= 8;  % too few files: pool startup costs > savings
+
+            if useParallel
+                pool = gcp("nocreate");
+                if isempty(pool)
+                    try
+                        parpool("Processes", opts.Workers);
+                    catch err
+                        warning("ice:sym:SymbolCache:NoPool", ...
+                            "Could not start parallel pool, falling back to serial: %s", err.message);
+                        useParallel = false;
+                    end
+                end
+            end
+
             if opts.ShowProgress && nFiles > 0
-                bar = ice.util.Progress(nFiles, "FTPCSD read");
+                label = sprintf("FTPCSD read (%s)", ...
+                    ternary(useParallel, sprintf("%dw", opts.Workers), "serial"));
+                bar = ice.util.Progress(nFiles, label);
             else
                 bar = ice.util.Progress.empty;
             end
 
-            for k = 1:nFiles
-                parts{k} = ice.ftp.readFtpcsd(opts.FtpcsdFiles(k));
-                if ~isempty(bar); bar.tick(); end
+            files = opts.FtpcsdFiles;
+            if useParallel
+                pool = gcp("nocreate");
+                futures(nFiles) = parallel.FevalFuture();
+                for k = 1:nFiles
+                    futures(k) = parfeval(pool, @ice.ftp.readFtpcsd, 1, files(k));
+                end
+                for j = 1:nFiles
+                    [idx, partTable] = fetchNext(futures);
+                    parts{idx} = partTable;
+                    if ~isempty(bar); bar.tick(); end
+                end
+            else
+                for k = 1:nFiles
+                    parts{k} = ice.ftp.readFtpcsd(files(k));
+                    if ~isempty(bar); bar.tick(); end
+                end
             end
             if ~isempty(bar); bar.done(); end
 
@@ -145,6 +184,10 @@ classdef SymbolCache < handle
             end
         end
     end
+end
+
+function v = ternary(cond, a, b)
+if cond; v = a; else; v = b; end
 end
 
 function parts = harmonizePartSchemas(parts)

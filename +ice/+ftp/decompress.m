@@ -56,12 +56,12 @@ if ~isfolder(outDir)
     mkdir(outDir);
 end
 
-backend = pickBz2Backend();
+[backend, exePath] = pickBz2Backend();
 switch backend
     case "bzip2"
-        runBzip2Exe(srcPath, outPath);
+        runBzip2Exe(exePath, srcPath, outPath);
     case "7z"
-        run7zExe(srcPath, outDir);
+        run7zExe(exePath, srcPath, outDir);
     case "python"
         runPython(srcPath, outPath);
     otherwise
@@ -77,22 +77,47 @@ if ~isfile(outPath)
 end
 end
 
-function b = pickBz2Backend()
-persistent cache
-if ~isempty(cache)
-    b = cache;
+function [b, exePath] = pickBz2Backend()
+%PICKBZ2BACKEND Resolve the best bz2 decoder.
+%   Tries in order:
+%     1. bzip2 on PATH                       — fastest, native
+%     2. bzip2.exe bootstrapped under cacheRoot/bin (Windows auto-install)
+%     3. 7z on PATH                          — fallback
+%     4. MATLAB Python bridge (py.bz2)       — last-resort, slow
+persistent cachedBackend cachedPath
+if ~isempty(cachedBackend)
+    b = cachedBackend;
+    exePath = cachedPath;
     return
 end
+
 if hasExe("bzip2")
-    b = "bzip2";
+    b = "bzip2"; exePath = "bzip2";
+elseif ispc
+    % Try the bootstrap path. ensureBzip2 downloads if missing.
+    try
+        exePath = ice.util.ensureBzip2();
+        b = "bzip2";
+    catch
+        exePath = "";
+        b = "";
+    end
+    if b == ""
+        if hasExe("7z")
+            b = "7z"; exePath = "7z";
+        elseif pythonReady()
+            b = "python"; exePath = "";
+        end
+    end
 elseif hasExe("7z")
-    b = "7z";
+    b = "7z"; exePath = "7z";
 elseif pythonReady()
-    b = "python";
+    b = "python"; exePath = "";
 else
-    b = "";
+    b = ""; exePath = "";
 end
-cache = b;
+cachedBackend = b;
+cachedPath = exePath;
 end
 
 function tf = hasExe(name)
@@ -109,12 +134,12 @@ catch
 end
 end
 
-function runBzip2Exe(srcPath, outPath)
+function runBzip2Exe(exePath, srcPath, outPath)
 % bzip2 -dk keeps source, decompresses to <name> next to it.
 tmp = string(tempname()) + ".bz2";
 copyfile(srcPath, tmp);
 cleanupTmp = onCleanup(@() safeDelete(tmp));
-[status, msg] = system(sprintf('bzip2 -dk "%s"', tmp));
+[status, msg] = system(sprintf('"%s" -dk "%s"', exePath, tmp));
 if status ~= 0
     error("ice:ftp:decompress:Bzip2Failed", "bzip2 returned %d: %s", status, msg);
 end
@@ -122,8 +147,8 @@ produced = extractBefore(tmp, ".bz2");
 movefile(produced, outPath);
 end
 
-function run7zExe(srcPath, outDir)
-[status, msg] = system(sprintf('7z e -y -o"%s" "%s"', outDir, srcPath));
+function run7zExe(exePath, srcPath, outDir)
+[status, msg] = system(sprintf('"%s" e -y -o"%s" "%s"', exePath, outDir, srcPath));
 if status ~= 0
     error("ice:ftp:decompress:SevenZipFailed", "7z returned %d: %s", status, msg);
 end

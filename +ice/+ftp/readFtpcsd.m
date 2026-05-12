@@ -26,16 +26,27 @@ end
 
 plain = ice.ftp.decompress(filePath);
 
-opts = detectImportOptions(plain, FileType="text", Delimiter=",");
+% Read the header line manually rather than letting detectImportOptions
+% scan the whole file twice. FTPCSD files are comma-quote delimited so we
+% can construct delimitedTextImportOptions directly with the column count
+% the header tells us.
+[origTokens, nCols] = readHeader(plain);
+
+opts = delimitedTextImportOptions(NumVariables=nCols, ...
+    Delimiter=",", ...
+    Encoding="UTF-8", ...
+    DataLines=[2 Inf], ...
+    EmptyLineRule="skip", ...
+    ExtraColumnsRule="ignore");
+opts.VariableNames = matlab.lang.makeValidName(cellstr(origTokens), ReplacementStyle="underscore");
 opts.VariableNamingRule = "preserve";
 opts.VariableTypes(:) = {'string'};
-% Some FTPCSD rows have fewer columns than the header when trailing fields
-% are blank — readtable defaults handle this by padding with missing.
-opts.ExtraColumnsRule = "ignore";
-opts.EmptyLineRule = "skip";
 raw = readtable(plain, opts);
 
-origTokens = string(raw.Properties.VariableNames);
+% Restore the raw token names; the makeValidName above was only used so
+% readtable could assign columns by position without complaining.
+raw.Properties.VariableNames = cellstr(origTokens);
+
 niceNames = arrayfun(@normalizeTokenName, origTokens);
 
 % Resolve duplicate normalized names by suffixing _2, _3, ...
@@ -47,6 +58,31 @@ tbl = coerceCommonColumns(raw);
 end
 
 % --------------------------------------------------------------------------
+
+function [tokens, n] = readHeader(plainPath)
+% Read just the first line of a CSV and split it into the CTF token names.
+fid = fopen(plainPath, "r", "n", "UTF-8");
+if fid == -1
+    error("ice:ftp:readFtpcsd:CannotOpen", "Cannot open %s", plainPath);
+end
+cleanup = onCleanup(@() fclose(fid));
+line = string(fgetl(fid));
+if ismissing(line) || strlength(line) == 0
+    error("ice:ftp:readFtpcsd:EmptyHeader", "Empty header in %s", plainPath);
+end
+% Strip BOM if present.
+if startsWith(line, char(65279))
+    line = extractAfter(line, 1);
+end
+% Tokens come back quoted: "<...>","<...>",...
+% Strip leading/trailing quotes and split on '","' (allowing for optional
+% surrounding quote characters on first/last token).
+trimmed = strip(line);
+if startsWith(trimmed, '"'); trimmed = extractAfter(trimmed, 1); end
+if endsWith(trimmed, '"');   trimmed = extractBefore(trimmed, strlength(trimmed)); end
+tokens = string(strsplit(trimmed, '","'));
+n = numel(tokens);
+end
 
 function out = normalizeTokenName(token)
 % "<ENUM.SRC.ID>" -> "ENUM_SRC_ID"
