@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<flexhistory retrieved="2023-10-05T12:08:49Z">
+  <header>
+    <field name="interval_start" type="time"/>
+    <field name="flags" type="uint32"/>
+    <field name="bar_length" type="uint32"/>
+    <field name="tmp_2m" type="RT_BarData">
+      <element name="open" type="double"/>
+      <element name="high" type="double"/>
+      <element name="low" type="double"/>
+      <element name="average" type="double"/>
+    </field>
+  </header>
+  <timereference>Interval_start</timereference>
+  <data id="EDDH MR0!-GFS">
+    <row>
+      <field name="interval_start">1697868000</field>
+      <field name="flags">0</field>
+      <field name="bar_length">1</field>
+      <field name="tmp_2m">
+        <element name="open">12.57</element>
+        <element name="high">12.57</element>
+        <element name="low">12.57</element>
+        <element name="average">12.57</element>
+      </field>
+    </row>
+    <row>
+      <field name="interval_start">1697864400</field>
+      <field name="flags">0</field>
+      <field name="bar_length">1</field>
+      <field name="tmp_2m">
+        <element name="open">12.82</element>
+        <element name="high">12.82</element>
+        <element name="low">12.82</element>
+        <element name="average">12.82</element>
+      </field>
+    </row>
+    <row>
+      <field name="interval_start">1697860800</field>
+      <field name="flags">0</field>
+      <field name="bar_length">1</field>
+      <field name="tmp_2m">
+        <element name="open">13.07</element>
+        <element name="high">13.07</element>
+        <element name="low">13.07</element>
+        <element name="average">13.07</element>
+      </field>
+    </row>
+    <row>
+      <field name="interval_start">1697857200</field>
+      <field name="flags">0</field>
+      <field name="bar_length">1</field>
+      <field name="tmp_2m">
+        <element name="open">13.31</element>
+        <element name="high">13.31</element>
+        <element name="low">13.31</element>
+        <element name="average">13.31</element>
+      </field>
+    </row>
+    <row>
+      <field name="interval_start">1697853600</field>
+      <field name="flags">0</field>
+      <field name="bar_length">1</field>
+      <field name="tmp_2m">
+        <element name="open">13.6</element>
+        <element name="high">13.6</element>
+        <element name="low">13.6</element>
+        <element name="average">13.6</element>
+      </field>
+    </row>
+  </data>
+</flexhistory>
