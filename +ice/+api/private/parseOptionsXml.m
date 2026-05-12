@@ -48,35 +48,59 @@ end
 options = s.option;
 nOpt = numel(options);
 
-% First pass: collect the union of per-side quote field names across all
-% calls and puts so every row has the same column set.
-sideFieldSet = string([]);
+% Pass 1: discover the union of per-side field names AND decide each
+% field's column type (numeric vs string) by sniffing the first
+% non-missing value. Doing the type decision upfront lets pass 2 take
+% a branch-free fast path per field; previously we re-decided per row
+% via a containers.Map probe and burned ~30% of total time on it.
+sideTypes = struct();   % field -> "num" | "str"
 for k = 1:nOpt
     o = options(k);
-    if isfield(o, "call")
-        sideFieldSet = unique([sideFieldSet; sideFieldNames(o.call)]);
-    end
-    if isfield(o, "put")
-        sideFieldSet = unique([sideFieldSet; sideFieldNames(o.put)]);
+    for side_i = ["call", "put"]
+        if ~isfield(o, side_i); continue; end
+        ce = o.(side_i);
+        if isempty(ce) || all(ismissing(ce)); continue; end
+        if numel(ce) > 1; ce = ce(1); end
+        fn = string(fieldnames(ce));
+        fn = fn(~endsWith(fn, "Attribute") & fn ~= "Text");
+        for j = 1:numel(fn)
+            f = fn(j);
+            if isfield(sideTypes, f); continue; end
+            kind = sniffType(ce.(f));
+            if kind ~= ""
+                sideTypes.(f) = kind;
+            end
+        end
     end
 end
+sideFieldSet = string(fieldnames(sideTypes));
 
 % Chain-level metadata columns (string for safety; strike is numeric).
 metaStrCols = ["underlier","root","exchg","type","status","request","id"];
 metaNumCols = ["strike","dte","dtetd","units","unitssecondary","delay"];
 
-rowsPerOpt = 2;  % call + put, even if one side missing (we emit a missing row)
+rowsPerOpt = 2;
 nRows = nOpt * rowsPerOpt;
 
-% Allocate columns.
 side = strings(nRows, 1);
 metaStr = struct();
 for c = 1:numel(metaStrCols); metaStr.(metaStrCols(c)) = strings(nRows, 1); end
 metaNum = struct();
 for c = 1:numel(metaNumCols); metaNum.(metaNumCols(c)) = nan(nRows, 1); end
+
+% Pre-allocate per-side columns with their known types.
 sideStr = struct();
 sideNum = struct();
-sideKindNumeric = containers.Map('KeyType','char','ValueType','logical');
+sideIsNum = false(numel(sideFieldSet), 1);
+for c = 1:numel(sideFieldSet)
+    f = sideFieldSet(c);
+    if sideTypes.(f) == "num"
+        sideNum.(f) = nan(nRows, 1);
+        sideIsNum(c) = true;
+    else
+        sideStr.(f) = strings(nRows, 1);
+    end
+end
 
 idx = 0;
 for k = 1:nOpt
@@ -84,8 +108,6 @@ for k = 1:nOpt
     for side_i = ["call", "put"]
         idx = idx + 1;
         side(idx) = side_i;
-        % Chain-level metadata: prefer child elements (stock-options shape),
-        % fall back to attributes (future-options shape uses some attrs).
         for c = 1:numel(metaStrCols)
             metaStr.(metaStrCols(c))(idx) = readMetaString(o, metaStrCols(c));
         end
@@ -93,37 +115,37 @@ for k = 1:nOpt
             metaNum.(metaNumCols(c))(idx) = readMetaNumeric(o, metaNumCols(c));
         end
 
-        % Per-side fields: pull from the o.call / o.put child if present.
-        if isfield(o, char(side_i)) && ~isempty(o.(char(side_i))) && ~all(ismissing(o.(char(side_i))))
-            ce = o.(char(side_i));
-            % If multiple call/put nodes for a given option (shouldn't happen
-            % per docs, but be defensive), take the first.
-            if numel(ce) > 1; ce = ce(1); end
-            for c = 1:numel(sideFieldSet)
-                fld = sideFieldSet(c);
-                [val, isNum] = readSideField(ce, fld);
-                if ~isKey(sideKindNumeric, char(fld))
-                    sideKindNumeric(char(fld)) = isNum;
-                    if isNum
-                        sideNum.(fld) = nan(nRows, 1);
-                    else
-                        sideStr.(fld) = strings(nRows, 1);
-                    end
-                end
-                if sideKindNumeric(char(fld))
-                    if ~isfield(sideNum, fld); sideNum.(fld) = nan(nRows, 1); end
-                    if isnumeric(val) && ~isnan(val); sideNum.(fld)(idx) = val; end
+        if ~isfield(o, side_i); continue; end
+        ce = o.(side_i);
+        if isempty(ce) || all(ismissing(ce)); continue; end
+        if numel(ce) > 1; ce = ce(1); end
+
+        for c = 1:numel(sideFieldSet)
+            f = sideFieldSet(c);
+            if ~isfield(ce, f); continue; end
+            raw = ce.(f);
+            if isstruct(raw)
+                if isscalar(raw) && isfield(raw, "Text") && ~ismissing(raw.Text)
+                    raw = raw.Text;
                 else
-                    if ~isfield(sideStr, fld); sideStr.(fld) = strings(nRows, 1); end
-                    if isnumeric(val); continue; end  % field missing on this row
-                    if val ~= ""; sideStr.(fld)(idx) = val; end %#ok<STCMP>
+                    continue;
                 end
+            end
+            if all(ismissing(raw)); continue; end
+            if sideIsNum(c)
+                if isnumeric(raw)
+                    sideNum.(f)(idx) = double(raw);
+                else
+                    d = str2double(string(raw));
+                    if ~isnan(d); sideNum.(f)(idx) = d; end
+                end
+            else
+                sideStr.(f)(idx) = string(raw);
             end
         end
     end
 end
 
-% Assemble: meta columns, then side, then per-side fields in alphabetical order.
 tbl = table();
 for c = 1:numel(metaStrCols); tbl.(metaStrCols(c)) = metaStr.(metaStrCols(c)); end
 for c = 1:numel(metaNumCols); tbl.(metaNumCols(c)) = metaNum.(metaNumCols(c)); end
@@ -131,30 +153,38 @@ tbl.side = side;
 
 sideFieldSorted = sort(sideFieldSet);
 for c = 1:numel(sideFieldSorted)
-    fld = sideFieldSorted(c);
-    if isKey(sideKindNumeric, char(fld)) && sideKindNumeric(char(fld))
-        tbl.(fld) = sideNum.(fld);
+    f = sideFieldSorted(c);
+    if sideTypes.(f) == "num"
+        tbl.(f) = sideNum.(f);
     else
-        if isfield(sideStr, fld)
-            tbl.(fld) = sideStr.(fld);
-        else
-            tbl.(fld) = strings(nRows, 1);
-        end
+        tbl.(f) = sideStr.(f);
     end
 end
 end
 
-function names = sideFieldNames(node)
-% Names of value-bearing children on a <call> or <put>. Filters out the
-% XML attribute placeholders (*Attribute) and the readstruct synthetic
-% "Text" field used when an element has both attributes and a text body.
-if isempty(node) || all(ismissing(node))
-    names = string([]);
+function kind = sniffType(raw)
+% Returns "num" | "str" | "" (the latter means "don't know yet").
+kind = "";
+if isstruct(raw)
+    if isscalar(raw) && isfield(raw, "Text") && ~ismissing(raw.Text)
+        raw = raw.Text;
+    else
+        kind = "str";  % nested children -> we'll store .Text or skip
+        return
+    end
+end
+if all(ismissing(raw)); return; end
+if isnumeric(raw)
+    kind = "num";
     return
 end
-if numel(node) > 1; node = node(1); end
-fn = string(fieldnames(node));
-names = fn(~endsWith(fn, "Attribute") & fn ~= "Text");
+% String / char: probe with str2double.
+d = str2double(string(raw));
+if isnan(d) || strlength(string(raw)) == 0
+    kind = "str";
+else
+    kind = "num";
+end
 end
 
 function v = readMetaString(o, name)
@@ -186,39 +216,6 @@ if isfield(o, name + "Attribute")
             v = double(raw);
         end
     end
-end
-end
-
-function [val, isNum] = readSideField(node, name)
-isNum = true;
-val = NaN;
-if ~isfield(node, name); return; end
-raw = node.(name);
-% Struct-shaped node (attributes alongside text, or nested children) —
-% take .Text if present; otherwise skip this field for this row.
-if isstruct(raw)
-    if isscalar(raw) && isfield(raw, "Text") && ~ismissing(raw.Text)
-        raw = raw.Text;
-    else
-        isNum = false;
-        val = "";
-        return
-    end
-end
-if all(ismissing(raw)); return; end
-if ischar(raw) || isstring(raw)
-    d = str2double(string(raw));
-    if isnan(d)
-        isNum = false;
-        val = string(raw);
-    else
-        val = d;
-    end
-elseif isnumeric(raw)
-    val = double(raw);
-else
-    isNum = false;
-    val = string(raw);
 end
 end
 
