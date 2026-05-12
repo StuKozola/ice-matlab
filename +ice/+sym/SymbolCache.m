@@ -26,26 +26,61 @@ classdef SymbolCache < handle
 
         function build(obj, opts)
             %BUILD Build the symbol master from local FTP files.
+            %   Reads every FTPCSD file into a cell array of part-tables,
+            %   harmonises categorical levels across parts, then performs
+            %   a single bulk vertcat. Loop-vertcat reallocates on every
+            %   iteration and exhausts memory on 311-source feeds; the
+            %   one-shot vertcat plus categorical low-cardinality columns
+            %   keeps the build inside the working set.
             arguments
                 obj
                 opts.FtpcsdFiles  (1,:) string = strings(0)
                 opts.FtpsedolFile (1,1) string = ""
                 opts.FtpcusipFile (1,1) string = ""
+                opts.ShowProgress (1,1) logical = true
             end
 
-            csd = table();
-            for f = opts.FtpcsdFiles
-                part = ice.ftp.readFtpcsd(f);
-                csd = vertcat(csd, part); %#ok<AGROW>
+            nFiles = numel(opts.FtpcsdFiles);
+            parts = cell(nFiles, 1);
+
+            if opts.ShowProgress && nFiles > 0
+                bar = ice.util.Progress(nFiles, "FTPCSD read");
+            else
+                bar = ice.util.Progress.empty;
+            end
+
+            for k = 1:nFiles
+                parts{k} = ice.ftp.readFtpcsd(opts.FtpcsdFiles(k));
+                if ~isempty(bar); bar.tick(); end
+            end
+            if ~isempty(bar); bar.done(); end
+
+            if nFiles == 0
+                csd = table();
+            else
+                if opts.ShowProgress
+                    fprintf("[harmonize] aligning columns across %d parts...\n", nFiles);
+                end
+                parts = harmonizePartSchemas(parts);
+                if opts.ShowProgress
+                    fprintf("[vertcat]   concatenating %d parts...\n", nFiles);
+                end
+                t0 = tic;
+                csd = vertcat(parts{:});
+                if opts.ShowProgress
+                    fprintf("[vertcat]   done in %.1fs; total rows: %d\n", ...
+                        toc(t0), height(csd));
+                end
+                clear parts;  % free intermediate copies before the join
             end
 
             if strlength(opts.FtpsedolFile) > 0
+                if opts.ShowProgress
+                    fprintf("[merge]     joining FTPSEDOL...\n");
+                end
                 sed = ice.ftp.readFtpsedol(opts.FtpsedolFile);
-                % Outer-join so we keep symbols present in only one source.
                 csd = obj.mergeOnSrcTicker(csd, sed, "sedolFromSedolFile");
             end
-
-            % CUSIP wiring deferred until a fixture / live file is available.
 
             obj.Tbl = csd;
             obj.persistSnapshot();
@@ -110,4 +145,78 @@ classdef SymbolCache < handle
             end
         end
     end
+end
+
+function parts = harmonizePartSchemas(parts)
+% Align parts so vertcat doesn't fail on (a) missing columns, (b) mismatched
+% column orders, or (c) mismatched categorical levels.
+
+% (a) collect the union of column names + their target types.
+allCols = string([]);
+colType = containers.Map('KeyType','char','ValueType','char');
+for k = 1:numel(parts)
+    vn = string(parts{k}.Properties.VariableNames);
+    for j = 1:numel(vn)
+        if ~colType.isKey(char(vn(j)))
+            colType(char(vn(j))) = class(parts{k}.(vn(j)));
+            allCols(end+1) = vn(j); %#ok<AGROW>
+        end
+    end
+end
+
+% (b) for each part, add missing cols (with the right type) and reorder.
+for k = 1:numel(parts)
+    p = parts{k};
+    have = string(p.Properties.VariableNames);
+    missingCols = setdiff(allCols, have, "stable");
+    for c = 1:numel(missingCols)
+        name = missingCols(c);
+        n = height(p);
+        switch colType(char(name))
+            case "categorical"
+                p.(name) = categorical(strings(n, 1));
+                p.(name)(:) = missing;
+            case "string"
+                col = strings(n, 1);
+                col(:) = missing;
+                p.(name) = col;
+            case {"double", "single"}
+                p.(name) = nan(n, 1);
+            case {"uint8","uint16","uint32","uint64","int8","int16","int32","int64"}
+                p.(name) = zeros(n, 1, colType(char(name)));
+            case "datetime"
+                p.(name) = NaT(n, 1);
+            case "logical"
+                p.(name) = false(n, 1);
+            otherwise
+                col = strings(n, 1);
+                col(:) = missing;
+                p.(name) = col;
+        end
+    end
+    parts{k} = p(:, allCols);
+end
+
+% (c) categorical level alignment. For every column that is categorical
+% in *any* part, compute the union of categories across all parts and
+% reassign in each part so vertcat sees identical level sets.
+for c = 1:numel(allCols)
+    name = allCols(c);
+    if ~strcmp(colType(char(name)), "categorical"); continue; end
+    cats = string([]);
+    for k = 1:numel(parts)
+        if iscategorical(parts{k}.(name))
+            cats = unique([cats; string(categories(parts{k}.(name)))]); %#ok<AGROW>
+        end
+    end
+    for k = 1:numel(parts)
+        col = parts{k}.(name);
+        if ~iscategorical(col)
+            col = categorical(string(col), cats);
+        else
+            col = setcats(col, cellstr(cats));
+        end
+        parts{k}.(name) = col;
+    end
+end
 end
