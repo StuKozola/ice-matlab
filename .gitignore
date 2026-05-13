@@ -46,3 +46,7 @@ desktop.ini
 
 # Cygwin/Git-Bash crash dumps (occasionally left behind by msys runtime)
 *.stackdump
+
+# Toolbox build output
+dist/
+*.mltbx
